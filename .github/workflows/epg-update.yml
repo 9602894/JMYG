@@ -2,8 +2,8 @@ name: EPG Data Update
 
 on:
   schedule:
-    - cron: '0 16,22,4,10 * * *'  # 每天0点,6点,12点,18点(北京时间，UTC+8)
-  workflow_dispatch:  # 允许手动触发
+    - cron: '0 16,22,4,10 * * *'  # 北京时间 0点,6点,12点,18点
+  workflow_dispatch:
 
 jobs:
   update-epg:
@@ -13,37 +13,26 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        fetch-depth: 0  # 获取所有历史记录
+        token: ${{ secrets.PAT_TOKEN }}
         
-    - name: Set up Python
+    - name: Setup Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.9'
         
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
         pip install requests pytz lxml
         
-    - name: Download and process EPG data
+    - name: Process EPG data
       run: python scripts/process_epg.py
       
-    - name: Check for changes
-      id: check_changes
-      run: |
-        git add epg_data/
-        git status --porcelain
-        if [ -n "$(git status --porcelain)" ]; then
-          echo "has_changes=true" >> $GITHUB_OUTPUT
-        else
-          echo "has_changes=false" >> $GITHUB_OUTPUT
-        fi
-        
     - name: Commit and push changes
-      if: steps.check_changes.outputs.has_changes == 'true'
       run: |
-        git config --local user.name "github-actions[bot]"
-        git config --local user.email "github-actions[bot]@users.noreply.github.com"
-        git commit -m "🔄 Auto-update EPG data - $(date +'%Y-%m-%d %H:%M:%S')"
+        git config --global user.name "GitHub Actions"
+        git config --global user.email "actions@github.com"
+        git add epg_data/
+        git diff --cached --quiet || git commit -m "🔄 EPG Update $(date +'%Y-%m-%d %H:%M')"
         git push
+      env:
+        GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
