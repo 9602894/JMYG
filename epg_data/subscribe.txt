@@ -1,0 +1,11 @@
+# JMYG EPG 订阅地址
+# 自动更新的大陆和台湾地区EPG数据
+
+https://raw.githubusercontent.com/9602894/JMYG/main/epg_data/epg_cn.xml
+https://raw.githubusercontent.com/9602894/JMYG/main/epg_data/epg_tw.xml
+https://raw.githubusercontent.com/9602894/JMYG/main/epg_data/epg_cn.xml.gz
+https://raw.githubusercontent.com/9602894/JMYG/main/epg_data/epg_tw.xml.gz
+
+# 更新时间: 2025-11-22 17:11:11
+
+# 使用说明：将任意一个链接添加到播放器的EPG订阅设置中
