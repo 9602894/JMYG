@@ -76,7 +76,7 @@ def save_epg_data(content, filename):
 
 def generate_subscription_index():
     """生成订阅索引文件"""
-    base_url = "https://raw.githubusercontent.com/YOUR_USERNAME/JMYG/main/epg_data"
+    base_url = "https://raw.githubusercontent.com/9602894/JMYG/main/epg_data"
     
     index_content = f"""# EPG Subscription Index
 # Generated at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
@@ -104,9 +104,9 @@ def merge_epg_data(cn_content, tw_content):
         # 创建新的根元素
         merged_root = ET.Element('tv')
         merged_root.set('source-info-name', 'Merged EPG')
-        merged_root.set('source-info-url', 'https://github.com/YOUR_USERNAME/JMYG')
+        merged_root.set('source-info-url', 'https://github.com/9602894/JMYG')
         merged_root.set('generator-info-name', 'JMYG EPG Merger')
-        merged_root.set('generator-info-url', 'https://github.com/YOUR_USERNAME/JMYG')
+        merged_root.set('generator-info-url', 'https://github.com/9602894/JMYG')
         
         # 合并channel元素
         for channel in root_cn.findall('.//channel'):
