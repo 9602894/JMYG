@@ -11,4 +11,4 @@
 
 ## EPG 订阅地址
 
-在您的播放器中使用以下订阅地址：
+在您的播放器中使用以下订阅地址：https://raw.githubusercontent.com/9602894/JMYG/main/epg_data/epg_merged.xml
