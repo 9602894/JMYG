@@ -27,13 +27,13 @@ def parse_xml_bytes(data):
 
 def convert_to_beijing_time(time_str):
     """
-    将XMLTV时间字符串转换为北京时间 (UTC+8)
+    将 XMLTV 时间字符串转换为北京时间 (UTC+8)
     返回格式：YYYYMMDDHHMMSS +0800
     """
     if not time_str:
         return time_str
-    
-    # 匹配原始时间 + 可选时区
+
+    # 匹配时间 + 可选时区
     match = re.match(r'(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})(?:\s*([+-]\d{4}))?', time_str)
     if not match:
         return time_str
@@ -43,22 +43,27 @@ def convert_to_beijing_time(time_str):
 
     dt = datetime(year, month, day, hour, minute, second)
 
-    # 如果有时区信息，先转换成 UTC
+    # **关键修正：统一先转 UTC**
     if tz_part:
-        tz_sign = -1 if tz_part[0] == '-' else 1
+        tz_sign = 1 if tz_part[0] == '+' else -1
         tz_hours = int(tz_part[1:3])
         tz_minutes = int(tz_part[3:5])
-        dt = dt - timedelta(hours=tz_sign*tz_hours + tz_sign*tz_minutes/60)
-    
-    # 再转换成北京时间
+        dt -= timedelta(hours=tz_sign*tz_hours, minutes=tz_sign*tz_minutes)
+    else:
+        # 没有时区信息，默认是 UTC
+        dt = dt
+
+    # 转换为北京时间 (UTC+8)
     dt += timedelta(hours=8)
+
     return dt.strftime('%Y%m%d%H%M%S +0800')
 
 def process_programme_time(programme):
-    """直接修改原始 programme 的 start/stop 为北京时间"""
+    """直接修改 programme 的 start/stop 为北京时间"""
     for attr in ['start', 'stop']:
-        if programme.get(attr):
-            programme.set(attr, convert_to_beijing_time(programme.get(attr)))
+        val = programme.get(attr)
+        if val:
+            programme.set(attr, convert_to_beijing_time(val))
 
 def clean_channel_name(channel):
     """移除 display-name 中的 UTC/GMT 时区信息"""
