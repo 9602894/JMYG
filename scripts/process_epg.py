@@ -1,111 +1,96 @@
 #!/usr/bin/env python3
 import requests
 import xml.etree.ElementTree as ET
-from datetime import datetime
 import os
 import gzip
 
 def safe_download(url):
-    """安全下载EPG数据"""
+    """安全下载 EPG（保持原始字节）"""
     try:
         print(f"📥 下载: {url}")
-        response = requests.get(url, timeout=30)
-        response.raise_for_status()
-        return response.text
+        r = requests.get(url, timeout=30)
+        r.raise_for_status()
+        return r.content   # ⚠️ 必须是 bytes
     except Exception as e:
         print(f"❌ 下载失败: {e}")
         return None
 
-def merge_epg_data(cn_content, tw_content):
-    """合并两个EPG数据源"""
-    print("🔄 合并EPG数据...")
-    
-    # 创建新的根元素
+def parse_xml_bytes(xml_bytes):
+    """从 bytes 安全解析 XML"""
+    try:
+        return ET.fromstring(xml_bytes)
+    except Exception as e:
+        print(f"❌ XML解析失败: {e}")
+        return None
+
+def merge_epg_data(cn_bytes, tw_bytes):
+    print("🔄 合并 EPG 数据...")
+
     merged_root = ET.Element('tv')
     merged_root.set('source-info-name', 'JMYG Merged EPG')
     merged_root.set('source-info-url', 'https://github.com/9602894/JMYG')
     merged_root.set('generator-info-name', 'JMYG EPG Merger')
-    
-    # 用于跟踪已添加的频道，避免重复
+
     added_channels = set()
-    
-    # 处理所有内容
-    all_content = []
-    if cn_content:
-        all_content.append(('CN', cn_content))
-    if tw_content:
-        all_content.append(('TW', tw_content))
-    
-    for source_name, content in all_content:
-        try:
-            root = ET.fromstring(content)
-            
-            # 添加频道
-            for channel in root.findall('channel'):
-                channel_id = channel.get('id')
-                if channel_id and channel_id not in added_channels:
-                    merged_root.append(channel)
-                    added_channels.add(channel_id)
-            
-            # 添加节目
-            for programme in root.findall('programme'):
-                merged_root.append(programme)
-                
-            print(f"✅ 已合并 {source_name} 数据")
-            
-        except Exception as e:
-            print(f"❌ 处理 {source_name} 数据时出错: {e}")
-    
-    # 转换为XML字符串
-    return '<?xml version="1.0" encoding="UTF-8"?>\n' + ET.tostring(merged_root, encoding='utf-8').decode()
 
-def simple_timezone_fix(xml_content):
-    """简单时区修复"""
-    if xml_content:
-        return xml_content.replace('+0000', '+0800').replace('UTC', '+0800')
-    return xml_content
+    for name, data in [('CN', cn_bytes), ('TW', tw_bytes)]:
+        if not data:
+            continue
 
-def save_data(content, filename):
-    """保存数据"""
+        root = parse_xml_bytes(data)
+        if root is None:
+            continue
+
+        for ch in root.findall('channel'):
+            cid = ch.get('id')
+            if cid and cid not in added_channels:
+                merged_root.append(ch)
+                added_channels.add(cid)
+
+        for p in root.findall('programme'):
+            merged_root.append(p)
+
+        print(f"✅ 已合并 {name}")
+
+    # ⚠️ 输出为 bytes
+    xml_bytes = ET.tostring(
+        merged_root,
+        encoding='utf-8',
+        xml_declaration=True
+    )
+
+    return xml_bytes
+
+def save_data(xml_bytes, filename):
     os.makedirs('epg_data', exist_ok=True)
-    
-    # 保存XML
-    with open(f'epg_data/{filename}', 'w', encoding='utf-8') as f:
-        f.write(content)
-    
-    # 保存压缩版
-    with gzip.open(f'epg_data/{filename}.gz', 'wt', encoding='utf-8') as f:
-        f.write(content)
-    
-    print(f"💾 已保存: {filename}")
+
+    xml_path = f'epg_data/{filename}'
+    gz_path = f'{xml_path}.gz'
+
+    # 保存 XML（binary）
+    with open(xml_path, 'wb') as f:
+        f.write(xml_bytes)
+
+    # 保存 gzip（binary）
+    with gzip.open(gz_path, 'wb') as f:
+        f.write(xml_bytes)
+
+    print(f"💾 已保存: {xml_path}")
+    print(f"💾 已保存: {gz_path}")
 
 def main():
-    print("🚀 开始处理EPG数据...")
-    
-    # 下载两个数据源
-    cn_content = safe_download('https://epg.pw/xmltv/epg_CN.xml')
-    tw_content = safe_download('https://epg.pw/xmltv/epg_TW.xml')
-    
-    # 时区修复
-    cn_content_fixed = simple_timezone_fix(cn_content)
-    tw_content_fixed = simple_timezone_fix(tw_content)
-    
-    # 合并数据
-    merged_content = merge_epg_data(cn_content_fixed, tw_content_fixed)
-    
-    if merged_content:
-        # 保存合并的EPG文件
-        save_data(merged_content, 'epg_merged.xml')
-        print("✅ EPG数据合并完成！")
+    print("🚀 开始处理 EPG 数据")
+
+    cn = safe_download('https://epg.pw/xmltv/epg_CN.xml')
+    tw = safe_download('https://epg.pw/xmltv/epg_TW.xml')
+
+    merged = merge_epg_data(cn, tw)
+
+    if merged:
+        save_data(merged, 'epg_merged.xml')
+        print("✅ 合并完成，无乱码")
     else:
-        print("❌ EPG数据合并失败，使用备用方案")
-        # 备用方案：如果合并失败，至少保存一个可用的
-        if cn_content_fixed:
-            save_data(cn_content_fixed, 'epg_merged.xml')
-        elif tw_content_fixed:
-            save_data(tw_content_fixed, 'epg_merged.xml')
-    
-    print("🎉 EPG处理完成！")
+        print("❌ 合并失败")
 
 if __name__ == '__main__':
     main()
