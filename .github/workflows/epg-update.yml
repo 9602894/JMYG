@@ -8,37 +8,25 @@ on:
 jobs:
   update-epg:
     runs-on: ubuntu-latest
-    env:
-      LANG: zh_CN.UTF-8
-      LC_ALL: zh_CN.UTF-8
-      PYTHONIOENCODING: utf-8
-
+    
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
         token: ${{ secrets.PAT_TOKEN }}
-
+        
     - name: Setup Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.9'
-
-    - name: Set UTF-8 locale
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y locales
-        sudo locale-gen zh_CN.UTF-8
-        sudo update-locale LANG=zh_CN.UTF-8
-
+        
     - name: Install dependencies
       run: |
         pip install requests pytz lxml
-
+        
     - name: Process EPG data
-      run: |
-        python -X utf8 scripts/process_epg.py
-
+      run: python scripts/process_epg.py
+      
     - name: Commit and push changes
       run: |
         git config --global user.name "GitHub Actions"
