@@ -25,70 +25,41 @@ def parse_xml_bytes(data):
         print(f"❌ XML解析失败: {e}")
         return None
 
-def parse_xmltv_time(time_str):
+def shift_time_to_beijing(time_str):
     """
-    解析XMLTV格式的时间字符串，返回datetime对象
-    格式: YYYYMMDDHHMMSS [TZ] 或 YYYYMMDDHHMMSS
+    将原始数据中的UTC时间向后推8小时，并标记为北京时间(+0800)
+    假设原始数据是UTC时间（即时间比北京时间早8小时）
     """
     if not time_str:
-        return None
+        return time_str
     
-    # 移除可能的空格和时区信息
-    parts = time_str.strip().split()
-    time_part = parts[0]
+    # 清理字符串
+    time_str = time_str.strip()
     
-    # 解析时间部分
-    if len(time_part) >= 14:
-        try:
-            year = int(time_part[0:4])
-            month = int(time_part[4:6])
-            day = int(time_part[6:8])
-            hour = int(time_part[8:10])
-            minute = int(time_part[10:12])
-            second = int(time_part[12:14]) if len(time_part) >= 14 else 0
-            
-            dt = datetime(year, month, day, hour, minute, second)
-            
-            # 如果有时区信息
-            if len(parts) > 1:
-                tz_str = parts[1]
-                if tz_str.startswith('+') or tz_str.startswith('-'):
-                    tz_sign = -1 if tz_str[0] == '-' else 1
-                    tz_hours = int(tz_str[1:3])
-                    tz_minutes = int(tz_str[3:5])
-                    
-                    # 计算时区偏移
-                    tz_offset = timedelta(hours=tz_hours, minutes=tz_minutes) * tz_sign
-                    
-                    # 调整时间到UTC
-                    dt = dt - tz_offset
-            
-            return dt
-        except ValueError as e:
-            print(f"❌ 时间解析失败 {time_str}: {e}")
-            return None
+    # 提取时间部分（去除任何时区信息）
+    time_match = re.match(r'(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})', time_str)
+    if not time_match:
+        return time_str
     
-    return None
-
-def convert_to_beijing_time(dt_utc):
-    """
-    将UTC时间转换为北京时间 (UTC+8)
-    """
-    if dt_utc is None:
-        return None
+    # 解析为UTC时间
+    year, month, day, hour, minute, second = map(int, time_match.groups())
+    dt_utc = datetime(year, month, day, hour, minute, second)
     
-    # 转换为北京时间
+    # 向后推8小时，得到北京时间
     dt_beijing = dt_utc + timedelta(hours=8)
     
-    # 格式化为XMLTV格式
+    # 格式化：YYYYMMDDHHMMSS +0800
     return dt_beijing.strftime('%Y%m%d%H%M%S +0800')
 
 def convert_all_times_in_xml(root):
-    """转换XML中所有的时间到北京时间"""
+    """
+    将XML中所有的时间向后推8小时（UTC→北京时间）
+    并清理频道显示名称
+    """
     if root is None:
         return None
     
-    print("🔄 正在转换所有时间到北京时间 (UTC+8)...")
+    print("🕐 将UTC时间转换为北京时间 (UTC+8)...")
     
     # 转换所有programme的start和stop属性
     programme_count = 0
@@ -98,28 +69,24 @@ def convert_all_times_in_xml(root):
         for attr in ['start', 'stop']:
             time_str = programme.get(attr)
             if time_str:
-                # 解析原始时间
-                dt_original = parse_xmltv_time(time_str)
-                
-                if dt_original:
-                    # 转换为北京时间
-                    beijing_time = convert_to_beijing_time(dt_original)
-                    programme.set(attr, beijing_time)
+                beijing_time = shift_time_to_beijing(time_str)
+                programme.set(attr, beijing_time)
     
     print(f"✅ 已转换 {programme_count} 个节目的时间")
     
-    # 清理频道显示名称中的时区信息
+    # 清理频道显示名称
     channel_count = 0
     for channel in root.findall('channel'):
         channel_count += 1
         for display_name in channel.findall('display-name'):
             if display_name.text:
-                # 移除UTC/GMT时区信息
-                original_text = display_name.text
-                display_name.text = re.sub(r'\s*\(UTC[+-]\d+\)', '', original_text)
-                display_name.text = re.sub(r'\s*\(GMT[+-]\d+\)', '', display_name.text)
-                display_name.text = re.sub(r'\s*UTC[+-]\d+', '', display_name.text)
-                display_name.text = re.sub(r'\s*GMT[+-]\d+', '', display_name.text)
+                # 移除所有时区信息
+                original = display_name.text
+                cleaned = re.sub(r'\s*\(UTC[+-]\d+\)', '', original)
+                cleaned = re.sub(r'\s*\(GMT[+-]\d+\)', '', cleaned)
+                cleaned = re.sub(r'\s*UTC[+-]\d+', '', cleaned)
+                cleaned = re.sub(r'\s*GMT[+-]\d+', '', cleaned)
+                display_name.text = cleaned.strip()
     
     print(f"✅ 已清理 {channel_count} 个频道的显示名称")
     
@@ -160,7 +127,7 @@ def merge_epg_data(cn_root, tw_root):
         xml_declaration=True
     )
 
-    # ⚠️ 关键：加 UTF-8 BOM
+    # 添加UTF-8 BOM
     return UTF8_BOM + xml_body
 
 def save_data(xml_bytes, filename):
@@ -178,67 +145,67 @@ def save_data(xml_bytes, filename):
     print(f"💾 已保存: {xml_path}")
     print(f"💾 已保存: {gz_path}")
 
-def test_time_conversion():
-    """测试时间转换函数"""
-    print("🔍 测试时间转换逻辑:")
+def test_time_shifting():
+    """
+    测试时间转换：UTC时间向后推8小时
+    原始epg.pw数据通常是UTC时间，需要显示为北京时间
+    """
+    print("🔍 测试时间转换 (UTC → 北京时间):")
     
-    # 模拟epg.pw的可能格式
+    # 示例：UTC时间 12:00 → 北京时间 20:00
     test_cases = [
-        '20240101200000',  # 无时区，常见格式
-        '20240101200000 +0000',  # UTC时间
-        '20240101200000 +0800',  # 已经是北京时间
-        '20240101200000 -0500',  # 其他时区
-        '20240101200000 +0530',  # 半小时间隔时区
+        ('20240101120000', '20240101200000 +0800'),  # UTC 12:00 → 北京 20:00
+        ('20240101000000', '20240101080000 +0800'),  # UTC 00:00 → 北京 08:00
+        ('20240101230000', '20240102070000 +0800'),  # UTC 23:00 → 北京 07:00 (+1天)
+        ('20240101120000 +0000', '20240101200000 +0800'),  # 带时区标记的UTC
+        ('20240101120000 UTC', '20240101200000 +0800'),    # 带UTC标记
     ]
     
-    for test in test_cases:
-        # 解析原始时间
-        dt_original = parse_xmltv_time(test)
-        
-        if dt_original:
-            # 转换为北京时间
-            beijing_time = convert_to_beijing_time(dt_original)
-            
-            # 显示结果
-            original_tz = test.split()[1] if len(test.split()) > 1 else "无时区"
-            print(f"  原始: {test} ({original_tz})")
-            print(f"  → UTC: {dt_original.strftime('%Y-%m-%d %H:%M:%S')}")
-            print(f"  → 北京: {beijing_time}")
-            print(f"  (时区转换: {'已转换' if '0800' in beijing_time else '未转换'})")
-            print()
+    for input_time, expected_output in test_cases:
+        output = shift_time_to_beijing(input_time)
+        status = "✓" if output == expected_output else "✗"
+        print(f"  {status} UTC: {input_time}")
+        print(f"      → 北京: {output}")
+        if output != expected_output:
+            print(f"     预期: {expected_output}")
 
-def validate_time_conversion(root):
-    """验证时间转换结果"""
-    print("\n🔍 验证时间转换结果:")
+def show_sample_times(root, source_name):
+    """
+    显示一些样本时间，确认转换是否正确
+    """
+    if root is None:
+        return
     
-    # 检查几个节目的时间
+    print(f"\n🔍 {source_name} 数据样本:")
+    
+    # 取前3个节目的时间
     programmes = list(root.findall('programme'))[:3]
     
     if not programmes:
-        print("  没有找到节目数据")
+        print("  没有节目数据")
         return
     
-    for i, p in enumerate(programmes):
-        channel = p.get('channel', '未知')
-        start = p.get('start', '未知')
-        stop = p.get('stop', '未知')
+    for i, prog in enumerate(programmes):
+        channel = prog.get('channel', '未知')
+        start = prog.get('start', '未知')
+        stop = prog.get('stop', '未知')
         
-        # 检查是否包含+0800
-        if '+0800' in start:
-            print(f"  ✓ 节目 {i+1}: {channel}")
-            print(f"     开始: {start}")
-            print(f"     结束: {stop}")
+        # 解析时间显示
+        if start and ' ' in start:
+            time_part = start.split()[0]
+            if len(time_part) >= 12:
+                hour_min = f"{time_part[8:10]}:{time_part[10:12]}"
+                print(f"  {i+1}. {channel}: {hour_min} (+0800)")
         else:
-            print(f"  ✗ 节目 {i+1}: {channel} - 时区转换失败!")
-            print(f"     开始: {start}")
-            print(f"     结束: {stop}")
+            print(f"  {i+1}. {channel}: {start}")
 
 def main():
-    print("🚀 开始生成 Ku9 专用 EPG（北京时间 UTC+8）")
-    print("📍 您的位置：东8区（中国标准时间）")
+    print("🚀 开始生成 Ku9 专用 EPG")
+    print("🕐 时间处理: UTC时间 → 北京时间 (+8小时)")
+    print("📍 您的时区: 东8区 (中国标准时间)")
     
     # 测试时间转换逻辑
-    test_time_conversion()
+    test_time_shifting()
     
     print("\n📡 开始下载EPG数据...")
     cn_bytes = safe_download('https://epg.pw/xmltv/epg_CN.xml')
@@ -253,53 +220,64 @@ def main():
     cn_root = parse_xml_bytes(cn_bytes) if cn_bytes else None
     tw_root = parse_xml_bytes(tw_bytes) if tw_bytes else None
     
+    # 转换时区
     if cn_root:
-        print(f"✅ CN 数据解析完成")
-        # 转换CN数据时区
+        print("\n🔄 处理CN数据时区...")
         cn_root = convert_all_times_in_xml(cn_root)
-        validate_time_conversion(cn_root)
+        show_sample_times(cn_root, "CN")
     
     if tw_root:
-        print(f"✅ TW 数据解析完成")
-        # 转换TW数据时区
+        print("\n🔄 处理TW数据时区...")
         tw_root = convert_all_times_in_xml(tw_root)
-        validate_time_conversion(tw_root)
+        show_sample_times(tw_root, "TW")
     
-    # 合并转换后的数据
+    # 合并数据
     print("\n🔄 合并所有数据...")
     if cn_root or tw_root:
         merged_xml = merge_epg_data(cn_root, tw_root)
         
         if merged_xml:
             # 最终验证
-            print("\n🔍 最终验证合并数据:")
+            print("\n🔍 最终验证:")
             merged_root = ET.fromstring(merged_xml[len(UTF8_BOM):])
             
-            # 统计信息
-            channel_count = len(list(merged_root.findall('channel')))
-            programme_count = len(list(merged_root.findall('programme')))
-            
-            print(f"  频道数: {channel_count}")
-            print(f"  节目数: {programme_count}")
-            
-            # 检查时区
+            # 统计
+            channels = list(merged_root.findall('channel'))
             programmes = list(merged_root.findall('programme'))
+            
+            print(f"  频道总数: {len(channels)}")
+            print(f"  节目总数: {len(programmes)}")
+            
+            # 检查时间格式
             if programmes:
                 sample = programmes[0]
                 start_time = sample.get('start', '')
                 if '+0800' in start_time:
-                    print(f"  ✓ 确认: 所有时间已转换为北京时间 (+0800)")
+                    print("  ✓ 所有时间已标记为北京时间 (+0800)")
+                    
+                    # 显示具体时间对比示例
+                    print("\n🕐 时间转换示例:")
+                    for i, prog in enumerate(programmes[:2]):
+                        channel = prog.get('channel', '未知')
+                        start = prog.get('start', '未知')
+                        if start and ' ' in start:
+                            time_part = start.split()[0]
+                            if len(time_part) >= 12:
+                                utc_hour = (int(time_part[8:10]) - 8) % 24
+                                beijing_hour = time_part[8:10]
+                                print(f"  {channel}: UTC {utc_hour:02d}:{time_part[10:12]} → 北京 {beijing_hour}:{time_part[10:12]}")
                 else:
-                    print(f"  ✗ 警告: 时间可能未正确转换: {start_time}")
+                    print(f"  ✗ 时间未正确转换: {start_time}")
             
+            # 保存文件
             save_data(merged_xml, 'epg_ku9.xml')
-            print("\n✅ EPG 生成完成，适用于 Ku9 播放器")
-            print("✅ 时区：北京时间 (UTC+8)")
-            print("✅ 编码：UTF-8 with BOM")
-            print("✅ 格式：原始 XML + 压缩 GZ")
-            print("\n📊 生成信息:")
-            print("  - 生成时间:", datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
-            print("  - 文件位置: epg_data/epg_ku9.xml")
+            
+            print("\n✅ EPG 生成完成!")
+            print("✅ 时区: 北京时间 (UTC+8)")
+            print("✅ 编码: UTF-8 with BOM")
+            print("✅ 格式: XML + GZ")
+            print(f"\n📁 文件位置: epg_data/epg_ku9.xml")
+            print(f"📁 压缩文件: epg_data/epg_ku9.xml.gz")
         else:
             print("❌ 合并失败")
     else:
