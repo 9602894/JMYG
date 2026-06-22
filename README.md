@@ -8,7 +8,8 @@
 - 🕗 **东八区时区**: 所有时间已转换为 Asia/Shanghai 时区
 - 📱 **多格式支持**: 提供 XML 和 Gzip 压缩版本
 - 🔄 **手动触发**: 支持在 GitHub 页面手动立即更新
-
+## 原始链接
+https://github.com/9602894/JMYG/blob/main/epg_data/epg_merged.xml
 ## EPG 订阅地址
 
 在您的播放器中使用以下订阅地址：https://raw.githubusercontent.com/9602894/JMYG/main/epg_data/epg_merged.xml
